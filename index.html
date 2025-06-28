@@ -64,7 +64,6 @@
         <div id="debug-log-content" class="w-full h-full overflow-y-auto"></div>
     </div>
     
-    <!-- ** THE FIX: Classic script includes instead of ES Modules ** -->
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
@@ -141,35 +140,47 @@
             function hidePatrickModal() { log('Hiding Patrick confirmation modal.'); patrickModalOverlay.classList.add('hidden'); patrickModal.classList.add('hidden'); };
             
             log('Setting up Auth State Listener...');
-            auth.onAuthStateChanged((user) => {
+            auth.onAuthStateChanged(async (user) => {
                 log('Auth state has changed.');
                 if (user) {
                     log(`User authenticated with UID: ${user.uid}`);
                     userId = user.uid;
                     const scoreDocRef = db.collection("scores").doc("thps-record");
-                    log('Setting up Firestore data listener (onSnapshot)...');
                     
-                    scoreDocRef.onSnapshot((docSnap) => {
-                        log('Received data from Firestore.');
-                        loadingSpinner.style.display = 'none';
-                        mainContent.style.display = 'block';
-                        errorContainer.style.display = 'none';
-                        if (docSnap.exists) { log('Document exists, rendering UI.'); renderUI(docSnap.data()); } 
-                        else { log('Document does not exist, creating it now...'); addWin('Mitch'); addWin('Patrick'); updateDoc(scoreDocRef, {mitch_wins:0, patrick_wins:0, history:[]}); }
-                    }, (error) => {
-                        log(`FIRESTORE LISTENER ERROR: ${error.message}`);
-                        loadingSpinner.style.display = 'none';
-                        errorContainer.textContent = `Firestore permission error. Check rules. Message: ${error.message}`;
-                        errorContainer.style.display = 'block';
-                    });
-                    
-                    log('Attaching click listeners to buttons...');
-                    addMitchWinBtn.addEventListener('click', () => { log('Mitch win button clicked.'); addWin('Mitch'); });
-                    addPatrickWinBtn.addEventListener('click', () => { log('Patrick win button clicked.'); showPatrickConfirmation(); });
-                    patrickConfirmYesBtn.addEventListener('click', () => { log('Patrick "Yes" clicked.'); addWin('Patrick'); hidePatrickModal(); });
-                    patrickConfirmNoBtn.addEventListener('click', () => { log('Patrick "No" clicked.'); hidePatrickModal(); });
-                    patrickModalOverlay.addEventListener('click', () => { log('Modal overlay clicked.'); hidePatrickModal(); });
-                    log('All click listeners have been attached.');
+                    // ** THE NEW, ROBUST LOGIC **
+                    try {
+                        log('Ensuring scoreboard document exists...');
+                        // This command creates the document if it's missing, but doesn't overwrite it.
+                        await scoreDocRef.set({ mitch_wins: 0, patrick_wins: 0, history: [] }, { merge: true });
+                        log('Document check/creation successful.');
+
+                        log('Setting up Firestore data listener (onSnapshot)...');
+                        scoreDocRef.onSnapshot((docSnap) => {
+                            log('Received data update from Firestore.');
+                            loadingSpinner.style.display = 'none';
+                            mainContent.style.display = 'block';
+                            errorContainer.style.display = 'none';
+                            // No need to check for exists() here, because we already ensured it does.
+                            renderUI(docSnap.data());
+                        }, (error) => {
+                            log(`FIRESTORE LISTENER ERROR: ${error.message}`);
+                            errorContainer.textContent = `Firestore permission error: ${error.message}`;
+                        });
+
+                        log('Attaching click listeners to buttons...');
+                        addMitchWinBtn.addEventListener('click', () => { log('Mitch win button clicked.'); addWin('Mitch'); });
+                        addPatrickWinBtn.addEventListener('click', () => { log('Patrick win button clicked.'); showPatrickConfirmation(); });
+                        patrickConfirmYesBtn.addEventListener('click', () => { log('Patrick "Yes" clicked.'); addWin('Patrick'); hidePatrickModal(); });
+                        patrickConfirmNoBtn.addEventListener('click', () => { log('Patrick "No" clicked.'); hidePatrickModal(); });
+                        patrickModalOverlay.addEventListener('click', () => { log('Modal overlay clicked.'); hidePatrickModal(); });
+                        log('All click listeners have been attached.');
+
+                    } catch (error) {
+                         log(`CRITICAL SETUP FAILED: Could not ensure document exists. Error: ${error.message}`);
+                         errorContainer.textContent = `Could not initialize scoreboard. Check Firestore Rules. Error: ${error.message}`;
+                         errorContainer.style.display = 'block';
+                         loadingSpinner.style.display = 'none';
+                    }
 
                 } else {
                     log('User not authenticated. Attempting anonymous sign-in...');
