@@ -72,7 +72,6 @@
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, increment, arrayUnion, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Configuration ---
-        // Your web app's Firebase configuration
         const firebaseConfig = {
           apiKey: "AIzaSyDolIBT-1FWbJP-m9vSJ6HDcwGusWm_ey8",
           authDomain: "thps-scoreboard.firebaseapp.com",
@@ -88,7 +87,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        // setLogLevel('debug'); // Uncomment for detailed logs
+        // setLogLevel('debug');
 
         // --- DOM Elements ---
         const mitchScoreEl = document.getElementById('mitch-score');
@@ -101,6 +100,18 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         const mainContent = document.getElementById('main-content');
         const errorContainer = document.getElementById('error-container');
+        // Modal DOM Elements
+        const patrickModalOverlay = document.getElementById('patrick-modal-overlay');
+        const patrickModal = document.getElementById('patrick-modal');
+        const patrickModalMessage = document.getElementById('patrick-modal-message');
+        const patrickConfirmYesBtn = document.getElementById('patrick-confirm-yes');
+        const patrickConfirmNoBtn = document.getElementById('patrick-confirm-no');
+
+        // --- Taunts for Patrick ---
+        const patrickTaunts = [
+            "patrick that win was charity dont get cocky", "congrats ur now slightly less trash", "mitch was texting his ex when u won that calm down", "wow ur mom must be so proud of u beating mitch once", "click yes to admit that was pure luck", "so u finally figured out how to play huh genius", "even a blind squirrel finds a win sometimes", "say yes if ur the flukiest fluke to ever fluke", "that win was mid and u know it", "this win brought to u by sheer mitch mercy", "click yes to inflate ur ego even more u princess", "damn pat ur on fire psych just one win relax", "even mitch’s grandma coulda blocked that", "was that u winning or did mitch sneeze", "congrats on ur first win since 2019", "yes u won no ur still not good", "if u click yes ur officially proud of mediocrity", "patrick more like pathetic lmao click yes loser", "that was less a win more a mitch error", "someone screenshot this rare ass moment", "1 win closer to being slightly less irrelevant", "click yes if u peaked just now", "ur gameplay is as soft as ur handshake", "patrick u lil bitch stop smiling and click yes", "that win was so weak i almost sneezed it away", "u celebrating this like u won the olympics chill", "click yes to admit mitch went easy on ur ass", "was that skill or divine intervention", "patrick this win aged like milk", "click yes if u just got lucky af", "wow u won finally took u 30 tries", "that win had less power than ur wifi signal", "nice job winning on a distracted manchild", "ur basically the participation trophy of this game", "click yes if ur the weakest alpha ever", "that wasn’t talent bro that was pity in motion", "u win one game and suddenly think ur lebron", "click yes if ur the real life underdog story no one asked for", "mitch literally blinked and u won relax", "ur form was trash but hey a win's a win", "patrick out here grinding for the most average victory", "click yes to confirm ur fluke streak continues", "ur gameplay is so vanilla it hurts", "congrats pat u beat a guy running on 2 hours of sleep", "u play like someone’s dad trying his best", "click yes if u bribed the scoreboard app", "that win felt like watching paint dry but go off king", "patrick that win was as accidental as ur birth"
+        ];
+        let tauntIndex = 0;
 
         // --- Firestore Reference ---
         const scoreDocRef = doc(db, "artifacts", appId, "public/data/scores", "thps-record");
@@ -111,7 +122,7 @@
             if (user) {
                 console.log("User is authenticated:", user.uid);
                 userId = user.uid;
-                setupScoreListener(); // Start listening for score updates once authenticated
+                setupScoreListener();
             } else {
                 console.log("User is not authenticated. Trying to sign in...");
                 signInAnonymously(auth).catch(authError => {
@@ -125,11 +136,6 @@
 
         // --- Core Functions ---
 
-        /**
-         * Generates a string of tally marks for a given score.
-         * @param {number} score - The player's total score.
-         * @returns {string} A string of tally mark characters.
-         */
         function generateTallyMarks(score) {
             if (!score || score === 0) return 'No wins yet!';
             const fives = Math.floor(score / 5);
@@ -143,25 +149,17 @@
             return tallies;
         }
 
-        /**
-         * Renders the entire UI based on the latest data from Firestore.
-         * @param {object} data - The score data object from Firestore.
-         */
         function renderUI(data) {
             const mitchWins = data.mitch_wins || 0;
             const patrickWins = data.patrick_wins || 0;
             const history = data.history || [];
 
-            // Update scores
             mitchScoreEl.textContent = mitchWins;
             patrickScoreEl.textContent = patrickWins;
-
-            // Update tally marks
             mitchTallyEl.innerHTML = generateTallyMarks(mitchWins);
             patrickTallyEl.innerHTML = generateTallyMarks(patrickWins);
 
-            // Update history table
-            historyBodyEl.innerHTML = ''; // Clear existing history
+            historyBodyEl.innerHTML = '';
             const sortedHistory = history.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
             if (sortedHistory.length === 0) {
@@ -187,9 +185,6 @@
             }
         }
 
-        /**
-         * Sets up a real-time listener for the score document.
-         */
         function setupScoreListener() {
             errorContainer.style.display = 'none';
             onSnapshot(scoreDocRef, (docSnap) => {
@@ -214,11 +209,7 @@
                 errorContainer.style.display = 'block';
             });
         }
-
-        /**
-         * Updates the score in Firestore for the winning player.
-         * @param {('Mitch'|'Patrick')} winner - The name of the player who won.
-         */
+        
         async function addWin(winner) {
             if (!userId) {
                 console.error("Cannot add win: User not authenticated.");
@@ -247,13 +238,38 @@
             }
         }
 
+        // --- Modal Functions ---
+        function showPatrickConfirmation() {
+            // Cycle through the taunts and set the message
+            patrickModalMessage.textContent = patrickTaunts[tauntIndex];
+            tauntIndex = (tauntIndex + 1) % patrickTaunts.length;
+
+            // Show the modal
+            patrickModalOverlay.classList.remove('hidden');
+            patrickModal.classList.remove('hidden');
+        }
+
+        function hidePatrickModal() {
+            patrickModalOverlay.classList.add('hidden');
+            patrickModal.classList.add('hidden');
+        }
+
         // --- Event Listeners ---
         addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
-        addPatrickWinBtn.addEventListener('click', () => addWin('Patrick'));
+        addPatrickWinBtn.addEventListener('click', showPatrickConfirmation);
+        
+        // Modal Event Listeners
+        patrickConfirmYesBtn.addEventListener('click', () => {
+            addWin('Patrick');
+            hidePatrickModal();
+        });
+        patrickConfirmNoBtn.addEventListener('click', hidePatrickModal);
+        patrickModalOverlay.addEventListener('click', hidePatrickModal); // Close if user clicks outside
 
     </script>
 
     <!-- UI Structure -->
+    <div id="error-container" style="display: none;" class="h-screen flex items-center justify-center text-red-500 text-center p-4"></div>
     <div id="loading-spinner" class="h-screen flex flex-col items-center justify-center">
          <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -262,15 +278,12 @@
         <p class="mt-4 text-lg text-gray-400">Connecting to the Scoreboard...</p>
     </div>
     
-    <div id="error-container" style="display: none;" class="h-screen flex items-center justify-center text-red-500 text-center p-4"></div>
-
     <main id="main-content" style="display: none;" class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8 md:mb-12">
             <h1 class="font-bebas text-5xl md:text-7xl text-amber-400 tracking-wider">THPS All Time Record</h1>
             <p class="text-2xl md:text-4xl font-bebas text-gray-300">Mitch vs Patrick</p>
         </header>
 
-        <!-- Score Cards -->
         <section class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-8 md:mb-12">
             <!-- Mitch's Card -->
             <div class="player-card rounded-xl p-6 text-center shadow-lg">
@@ -293,7 +306,6 @@
             </div>
         </section>
 
-        <!-- History Section -->
         <section class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
             <h3 class="font-bebas text-3xl mb-4 text-center">Game History</h3>
             <div class="overflow-x-auto">
@@ -305,13 +317,25 @@
                             <th class="font-bebas text-xl tracking-wider">Time</th>
                         </tr>
                     </thead>
-                    <tbody id="history-body">
-                        <!-- History rows will be inserted here by JavaScript -->
-                    </tbody>
+                    <tbody id="history-body"></tbody>
                 </table>
             </div>
         </section>
     </main>
+
+    <!-- Patrick Confirmation Modal -->
+    <div id="patrick-modal-overlay" class="fixed inset-0 bg-black bg-opacity-75 z-40 hidden"></div>
+    <div id="patrick-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800 border border-amber-400 rounded-lg shadow-2xl p-6 md:p-8 z-50 w-11/12 md:max-w-lg hidden">
+        <p id="patrick-modal-message" class="text-center text-xl md:text-2xl text-white mb-6 font-semibold"></p>
+        <div class="flex justify-around">
+            <button id="patrick-confirm-yes" class="btn-win w-2/5 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-xl">
+                <span>Yes</span>
+            </button>
+            <button id="patrick-confirm-no" class="btn-win w-2/5 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg text-xl">
+                <span>No</span>
+            </button>
+        </div>
+    </div>
 
 </body>
 </html>
