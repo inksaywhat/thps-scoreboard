@@ -89,23 +89,10 @@
         const auth = getAuth(app);
         // setLogLevel('debug');
 
-        // --- DOM Elements ---
-        const mitchScoreEl = document.getElementById('mitch-score');
-        const patrickScoreEl = document.getElementById('patrick-score');
-        const mitchTallyEl = document.getElementById('mitch-tally');
-        const patrickTallyEl = document.getElementById('patrick-tally');
-        const addMitchWinBtn = document.getElementById('add-mitch-win');
-        const addPatrickWinBtn = document.getElementById('add-patrick-win');
-        const historyBodyEl = document.getElementById('history-body');
-        const loadingSpinner = document.getElementById('loading-spinner');
-        const mainContent = document.getElementById('main-content');
-        const errorContainer = document.getElementById('error-container');
-        // Modal DOM Elements
-        const patrickModalOverlay = document.getElementById('patrick-modal-overlay');
-        const patrickModal = document.getElementById('patrick-modal');
-        const patrickModalMessage = document.getElementById('patrick-modal-message');
-        const patrickConfirmYesBtn = document.getElementById('patrick-confirm-yes');
-        const patrickConfirmNoBtn = document.getElementById('patrick-confirm-no');
+        // --- DOM Elements (will be assigned later) ---
+        let mitchScoreEl, patrickScoreEl, mitchTallyEl, patrickTallyEl, addMitchWinBtn, addPatrickWinBtn,
+            historyBodyEl, loadingSpinner, mainContent, errorContainer, patrickModalOverlay,
+            patrickModal, patrickModalMessage, patrickConfirmYesBtn, patrickConfirmNoBtn;
 
         // --- Taunts for Patrick ---
         const patrickTaunts = [
@@ -120,16 +107,38 @@
         // --- Authentication ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                // Assign DOM elements now that we are authenticated and page is loaded
+                mitchScoreEl = document.getElementById('mitch-score');
+                patrickScoreEl = document.getElementById('patrick-score');
+                mitchTallyEl = document.getElementById('mitch-tally');
+                patrickTallyEl = document.getElementById('patrick-tally');
+                addMitchWinBtn = document.getElementById('add-mitch-win');
+                addPatrickWinBtn = document.getElementById('add-patrick-win');
+                historyBodyEl = document.getElementById('history-body');
+                loadingSpinner = document.getElementById('loading-spinner');
+                mainContent = document.getElementById('main-content');
+                errorContainer = document.getElementById('error-container');
+                patrickModalOverlay = document.getElementById('patrick-modal-overlay');
+                patrickModal = document.getElementById('patrick-modal');
+                patrickModalMessage = document.getElementById('patrick-modal-message');
+                patrickConfirmYesBtn = document.getElementById('patrick-confirm-yes');
+                patrickConfirmNoBtn = document.getElementById('patrick-confirm-no');
+                
                 console.log("User is authenticated:", user.uid);
                 userId = user.uid;
                 setupScoreListener();
+                setupEventListeners(); // Setup button clicks after elements are assigned
             } else {
                 console.log("User is not authenticated. Trying to sign in...");
                 signInAnonymously(auth).catch(authError => {
+                    const errorContainer = document.getElementById('error-container');
+                    const loadingSpinner = document.getElementById('loading-spinner');
                     console.error("Critical: Anonymous sign-in failed.", authError);
-                    loadingSpinner.style.display = 'none';
-                    errorContainer.textContent = `Error connecting: ${authError.message}. Check API key and Firebase setup.`;
-                    errorContainer.style.display = 'block';
+                    if (loadingSpinner) loadingSpinner.style.display = 'none';
+                    if (errorContainer) {
+                        errorContainer.textContent = `Error connecting: ${authError.message}. Check API key and Firebase setup.`;
+                        errorContainer.style.display = 'block';
+                    }
                 });
             }
         });
@@ -186,10 +195,10 @@
         }
 
         function setupScoreListener() {
-            errorContainer.style.display = 'none';
+            if (errorContainer) errorContainer.style.display = 'none';
             onSnapshot(scoreDocRef, (docSnap) => {
-                loadingSpinner.style.display = 'none';
-                mainContent.style.display = 'block';
+                if(loadingSpinner) loadingSpinner.style.display = 'none';
+                if(mainContent) mainContent.style.display = 'block';
 
                 if (docSnap.exists()) {
                     renderUI(docSnap.data());
@@ -204,9 +213,11 @@
                 }
             }, (error) => {
                 console.error("Error listening to score document:", error);
-                loadingSpinner.style.display = 'none';
-                errorContainer.textContent = `Firestore permission error: ${error.message}. Check your database rules.`;
-                errorContainer.style.display = 'block';
+                if (loadingSpinner) loadingSpinner.style.display = 'none';
+                if (errorContainer) {
+                     errorContainer.textContent = `Firestore permission error: ${error.message}. Check your database rules.`;
+                     errorContainer.style.display = 'block';
+                }
             });
         }
         
@@ -255,16 +266,18 @@
         }
 
         // --- Event Listeners ---
-        addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
-        addPatrickWinBtn.addEventListener('click', showPatrickConfirmation);
-        
-        // Modal Event Listeners
-        patrickConfirmYesBtn.addEventListener('click', () => {
-            addWin('Patrick');
-            hidePatrickModal();
-        });
-        patrickConfirmNoBtn.addEventListener('click', hidePatrickModal);
-        patrickModalOverlay.addEventListener('click', hidePatrickModal); // Close if user clicks outside
+        function setupEventListeners() {
+            addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
+            addPatrickWinBtn.addEventListener('click', showPatrickConfirmation);
+            
+            // Modal Event Listeners
+            patrickConfirmYesBtn.addEventListener('click', () => {
+                addWin('Patrick');
+                hidePatrickModal();
+            });
+            patrickConfirmNoBtn.addEventListener('click', hidePatrickModal);
+            patrickModalOverlay.addEventListener('click', hidePatrickModal); // Close if user clicks outside
+        }
 
     </script>
 
