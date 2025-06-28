@@ -68,30 +68,21 @@
     <script type="module">
         // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, increment, arrayUnion, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "firebase/app";
-        import { getAnalytics } from "firebase/analytics";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-
+        // --- Configuration ---
         // Your web app's Firebase configuration
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
         const firebaseConfig = {
-        apiKey: "AIzaSyDolIBT-1FWbJP-m9vSJ6HDcwGusWm_ey8",
-        authDomain: "thps-scoreboard.firebaseapp.com",
-        projectId: "thps-scoreboard",
-        storageBucket: "thps-scoreboard.firebasestorage.app",
-        messagingSenderId: "912407115453",
-        appId: "1:912407115453:web:b28dcda9faa96a6438e9d4",
-        measurementId: "G-RZ8N7RPJDV"
+          apiKey: "AIzaSyDolIBT-1FWbJP-m9vSJ6HDcwGusWm_ey8",
+          authDomain: "thps-scoreboard.firebaseapp.com",
+          projectId: "thps-scoreboard",
+          storageBucket: "thps-scoreboard.firebasestorage.app",
+          messagingSenderId: "912407115453",
+          appId: "1:912407115453:web:b28dcda9faa96a6438e9d4",
+          measurementId: "G-RZ8N7RPJDV"
         };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
+        const appId = firebaseConfig.projectId;
 
         // --- Firebase Initialization ---
         const app = initializeApp(firebaseConfig);
@@ -109,9 +100,9 @@
         const historyBodyEl = document.getElementById('history-body');
         const loadingSpinner = document.getElementById('loading-spinner');
         const mainContent = document.getElementById('main-content');
+        const errorContainer = document.getElementById('error-container');
 
         // --- Firestore Reference ---
-        // We use a specific document ID to ensure both users are always reading/writing to the same data.
         const scoreDocRef = doc(db, "artifacts", appId, "public/data/scores", "thps-record");
         let userId = null;
 
@@ -122,31 +113,15 @@
                 userId = user.uid;
                 setupScoreListener(); // Start listening for score updates once authenticated
             } else {
-                console.log("User is not authenticated.");
+                console.log("User is not authenticated. Trying to sign in...");
+                signInAnonymously(auth).catch(authError => {
+                    console.error("Critical: Anonymous sign-in failed.", authError);
+                    loadingSpinner.style.display = 'none';
+                    errorContainer.textContent = `Error connecting: ${authError.message}. Check API key and Firebase setup.`;
+                    errorContainer.style.display = 'block';
+                });
             }
         });
-
-        async function authenticateUser() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Initial authentication with custom token failed:", error);
-                // If the custom token fails (e.g., 'auth/invalid-claims'), fall back to anonymous sign-in.
-                console.log("Falling back to anonymous sign-in.");
-                try {
-                    await signInAnonymously(auth);
-                } catch (anonError) {
-                    console.error("Anonymous fallback sign-in also failed:", anonError);
-                    // If both methods fail, then display an error message to the user on the UI
-                    document.body.innerHTML = '<div class="h-screen flex items-center justify-center text-red-500">Could not connect to the scoreboard. Please refresh.</div>';
-                }
-            }
-        }
-
 
         // --- Core Functions ---
 
@@ -156,16 +131,15 @@
          * @returns {string} A string of tally mark characters.
          */
         function generateTallyMarks(score) {
-            if (score === 0) return 'No wins yet!';
+            if (!score || score === 0) return 'No wins yet!';
             const fives = Math.floor(score / 5);
             const ones = score % 5;
             let tallies = '';
             for (let i = 0; i < fives; i++) {
-                tallies += '<span class="inline-block mr-2">||||</span>'; // Using spans for better control
+                tallies += '<span class="inline-block mr-2">||||</span>'; 
             }
             tallies += '|'.repeat(ones);
-            // This is a bit of a trick to "cross" the final group of 4
-            tallies = tallies.replace(/\|\|\|\|<\/span>/g, '<span style="position: relative; display: inline-block; width: 3.5em;"><span style="text-decoration: line-through;">||||</span></span>');
+            tallies = tallies.replace(/\|\|\|\|<\/span>/g, '<span style="position: relative; display: inline-block; width: 3.5em; text-decoration: line-through;">||||</span>');
             return tallies;
         }
 
@@ -188,8 +162,7 @@
 
             // Update history table
             historyBodyEl.innerHTML = ''; // Clear existing history
-            // Sort history descending by timestamp
-            const sortedHistory = history.sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds);
+            const sortedHistory = history.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
 
             if (sortedHistory.length === 0) {
                  historyBodyEl.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No games recorded yet. Let the battle begin!</td></tr>`;
@@ -197,19 +170,15 @@
                 sortedHistory.forEach(game => {
                     const tr = document.createElement('tr');
                     tr.className = `border-b border-gray-700 ${game.winner === 'Mitch' ? 'bg-blue-900/20' : 'bg-green-900/20'}`;
-
                     const winnerCell = document.createElement('td');
                     winnerCell.className = `font-bold ${game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400'}`;
                     winnerCell.textContent = game.winner;
-
                     const dateCell = document.createElement('td');
                     dateCell.className = "text-gray-400";
                     dateCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleDateString() : 'Just now';
-
                     const timeCell = document.createElement('td');
                     timeCell.className = "text-gray-400";
                     timeCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleTimeString() : '';
-
                     tr.appendChild(winnerCell);
                     tr.appendChild(dateCell);
                     tr.appendChild(timeCell);
@@ -222,27 +191,27 @@
          * Sets up a real-time listener for the score document.
          */
         function setupScoreListener() {
+            errorContainer.style.display = 'none';
             onSnapshot(scoreDocRef, (docSnap) => {
                 loadingSpinner.style.display = 'none';
                 mainContent.style.display = 'block';
 
                 if (docSnap.exists()) {
-                    // Document exists, render the data
                     renderUI(docSnap.data());
                 } else {
-                    // Document doesn't exist, create it with initial values
                     console.log("No score document found, creating one.");
                     setDoc(scoreDocRef, {
                         mitch_wins: 0,
                         patrick_wins: 0,
                         history: []
                     }).catch(error => console.error("Error creating document:", error));
-                    // Initial render for the new doc
                     renderUI({ mitch_wins: 0, patrick_wins: 0, history: [] });
                 }
             }, (error) => {
                 console.error("Error listening to score document:", error);
-                loadingSpinner.innerHTML = '<p class="text-red-500">Error connecting to scoreboard.</p>';
+                loadingSpinner.style.display = 'none';
+                errorContainer.textContent = `Firestore permission error: ${error.message}. Check your database rules.`;
+                errorContainer.style.display = 'block';
             });
         }
 
@@ -266,18 +235,11 @@
                     })
                 });
             } catch (error) {
-                // This might happen if the document doesn't exist yet, so we try to create it.
                 if (error.code === 'not-found') {
                      await setDoc(scoreDocRef, {
                         mitch_wins: winner === 'Mitch' ? 1 : 0,
                         patrick_wins: winner === 'Patrick' ? 1 : 0,
-                        history: [
-                            {
-                                winner: winner,
-                                timestamp: serverTimestamp(),
-                                addedBy: userId
-                            }
-                        ]
+                        history: [{ winner: winner, timestamp: serverTimestamp(), addedBy: userId }]
                     });
                 } else {
                     console.error("Error adding win:", error);
@@ -289,9 +251,6 @@
         addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
         addPatrickWinBtn.addEventListener('click', () => addWin('Patrick'));
 
-        // --- Initial Load ---
-        authenticateUser();
-
     </script>
 
     <!-- UI Structure -->
@@ -302,6 +261,8 @@
         </svg>
         <p class="mt-4 text-lg text-gray-400">Connecting to the Scoreboard...</p>
     </div>
+    
+    <div id="error-container" style="display: none;" class="h-screen flex items-center justify-center text-red-500 text-center p-4"></div>
 
     <main id="main-content" style="display: none;" class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8 md:mb-12">
