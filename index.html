@@ -93,7 +93,6 @@
               appId: "1:912407115453:web:b28dcda9faa96a6438e9d4",
               measurementId: "G-RZ8N7RPJDV"
             };
-            const appId = firebaseConfig.projectId;
             log('Firebase config loaded.');
 
             // --- Firebase Initialization ---
@@ -123,8 +122,8 @@
             async function addWin(winner) {
                 log(`Attempting to add win for ${winner}.`);
                 if (!userId) { log("Add win FAILED: User ID is not set."); return; }
-                // *** FIX: Simplified path to match new security rules ***
-                const scoreDocRef = doc(db, "artifacts", appId, "public", "scores", "thps-record");
+                // *** FIX: Radically simplified path to avoid structure issues ***
+                const scoreDocRef = doc(db, "scores", "thps-record");
                 const fieldToUpdate = winner === 'Mitch' ? 'mitch_wins' : 'patrick_wins';
                 try {
                     await updateDoc(scoreDocRef, { [fieldToUpdate]: increment(1), history: arrayUnion({ winner: winner, timestamp: serverTimestamp(), addedBy: userId }) });
@@ -161,19 +160,20 @@
                 if (user) {
                     log(`User authenticated with UID: ${user.uid}`);
                     userId = user.uid;
-                    // *** FIX: Simplified path to match new security rules ***
-                    const scoreDocRef = doc(db, "artifacts", appId, "public", "scores", "thps-record");
+                    // *** FIX: Radically simplified path to avoid structure issues ***
+                    const scoreDocRef = doc(db, "scores", "thps-record");
                     log('Setting up Firestore data listener (onSnapshot)...');
                     onSnapshot(scoreDocRef, (docSnap) => {
                         log('Received data from Firestore.');
                         loadingSpinner.style.display = 'none';
                         mainContent.style.display = 'block';
+                        errorContainer.style.display = 'none'; // Hide error on success
                         if (docSnap.exists()) { log('Document exists, rendering UI.'); renderUI(docSnap.data()); } 
                         else { log('Document does not exist, rendering empty UI.'); renderUI({ mitch_wins: 0, patrick_wins: 0, history: [] }); }
                     }, (error) => {
                         log(`FIRESTORE LISTENER ERROR: ${error.message}`);
                         loadingSpinner.style.display = 'none';
-                        errorContainer.textContent = `Firestore permission error: ${error.message}. Check rules.`;
+                        errorContainer.textContent = `Firestore permission error. Check rules. Message: ${error.message}`;
                         errorContainer.style.display = 'block';
                     });
                 } else {
