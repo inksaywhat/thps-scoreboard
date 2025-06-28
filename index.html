@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THPS All Time Record: Mitch vs. Patrick</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark Gray */
+        }
+        .font-bebas {
+            font-family: 'Bebas Neue', cursive;
+        }
+        .tally-marks {
+            font-family: 'Bebas Neue', cursive;
+            letter-spacing: 0.2em;
+            color: #f59e0b; /* Amber */
+            -webkit-text-stroke: 1px #ca8a04;
+        }
+        .player-card {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            transition: all 0.3s ease-in-out;
+        }
+        .player-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+        .btn-win {
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-win:after {
+            content: '+1';
+            position: absolute;
+            top: -100%;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+        .btn-win:hover:after {
+            top: 0;
+        }
+        .btn-win span {
+            display: block;
+            transition: all 0.3s ease;
+        }
+        .btn-win:hover span {
+            transform: translateY(100%);
+        }
+        #history-table th, #history-table td {
+            padding: 12px 16px;
+        }
+    </style>
+</head>
+<body class="text-white antialiased">
+
+    <!-- Firebase and App Logic -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, increment, arrayUnion, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "firebase/app";
+        import { getAnalytics } from "firebase/analytics";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+        apiKey: "AIzaSyDolIBT-1FWbJP-m9vSJ6HDcwGusWm_ey8",
+        authDomain: "thps-scoreboard.firebaseapp.com",
+        projectId: "thps-scoreboard",
+        storageBucket: "thps-scoreboard.firebasestorage.app",
+        messagingSenderId: "912407115453",
+        appId: "1:912407115453:web:b28dcda9faa96a6438e9d4",
+        measurementId: "G-RZ8N7RPJDV"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+
+        // --- Firebase Initialization ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        // setLogLevel('debug'); // Uncomment for detailed logs
+
+        // --- DOM Elements ---
+        const mitchScoreEl = document.getElementById('mitch-score');
+        const patrickScoreEl = document.getElementById('patrick-score');
+        const mitchTallyEl = document.getElementById('mitch-tally');
+        const patrickTallyEl = document.getElementById('patrick-tally');
+        const addMitchWinBtn = document.getElementById('add-mitch-win');
+        const addPatrickWinBtn = document.getElementById('add-patrick-win');
+        const historyBodyEl = document.getElementById('history-body');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const mainContent = document.getElementById('main-content');
+
+        // --- Firestore Reference ---
+        // We use a specific document ID to ensure both users are always reading/writing to the same data.
+        const scoreDocRef = doc(db, "artifacts", appId, "public/data/scores", "thps-record");
+        let userId = null;
+
+        // --- Authentication ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("User is authenticated:", user.uid);
+                userId = user.uid;
+                setupScoreListener(); // Start listening for score updates once authenticated
+            } else {
+                console.log("User is not authenticated.");
+            }
+        });
+
+        async function authenticateUser() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Initial authentication with custom token failed:", error);
+                // If the custom token fails (e.g., 'auth/invalid-claims'), fall back to anonymous sign-in.
+                console.log("Falling back to anonymous sign-in.");
+                try {
+                    await signInAnonymously(auth);
+                } catch (anonError) {
+                    console.error("Anonymous fallback sign-in also failed:", anonError);
+                    // If both methods fail, then display an error message to the user on the UI
+                    document.body.innerHTML = '<div class="h-screen flex items-center justify-center text-red-500">Could not connect to the scoreboard. Please refresh.</div>';
+                }
+            }
+        }
+
+
+        // --- Core Functions ---
+
+        /**
+         * Generates a string of tally marks for a given score.
+         * @param {number} score - The player's total score.
+         * @returns {string} A string of tally mark characters.
+         */
+        function generateTallyMarks(score) {
+            if (score === 0) return 'No wins yet!';
+            const fives = Math.floor(score / 5);
+            const ones = score % 5;
+            let tallies = '';
+            for (let i = 0; i < fives; i++) {
+                tallies += '<span class="inline-block mr-2">||||</span>'; // Using spans for better control
+            }
+            tallies += '|'.repeat(ones);
+            // This is a bit of a trick to "cross" the final group of 4
+            tallies = tallies.replace(/\|\|\|\|<\/span>/g, '<span style="position: relative; display: inline-block; width: 3.5em;"><span style="text-decoration: line-through;">||||</span></span>');
+            return tallies;
+        }
+
+        /**
+         * Renders the entire UI based on the latest data from Firestore.
+         * @param {object} data - The score data object from Firestore.
+         */
+        function renderUI(data) {
+            const mitchWins = data.mitch_wins || 0;
+            const patrickWins = data.patrick_wins || 0;
+            const history = data.history || [];
+
+            // Update scores
+            mitchScoreEl.textContent = mitchWins;
+            patrickScoreEl.textContent = patrickWins;
+
+            // Update tally marks
+            mitchTallyEl.innerHTML = generateTallyMarks(mitchWins);
+            patrickTallyEl.innerHTML = generateTallyMarks(patrickWins);
+
+            // Update history table
+            historyBodyEl.innerHTML = ''; // Clear existing history
+            // Sort history descending by timestamp
+            const sortedHistory = history.sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds);
+
+            if (sortedHistory.length === 0) {
+                 historyBodyEl.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No games recorded yet. Let the battle begin!</td></tr>`;
+            } else {
+                sortedHistory.forEach(game => {
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-700 ${game.winner === 'Mitch' ? 'bg-blue-900/20' : 'bg-green-900/20'}`;
+
+                    const winnerCell = document.createElement('td');
+                    winnerCell.className = `font-bold ${game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400'}`;
+                    winnerCell.textContent = game.winner;
+
+                    const dateCell = document.createElement('td');
+                    dateCell.className = "text-gray-400";
+                    dateCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleDateString() : 'Just now';
+
+                    const timeCell = document.createElement('td');
+                    timeCell.className = "text-gray-400";
+                    timeCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleTimeString() : '';
+
+                    tr.appendChild(winnerCell);
+                    tr.appendChild(dateCell);
+                    tr.appendChild(timeCell);
+                    historyBodyEl.appendChild(tr);
+                });
+            }
+        }
+
+        /**
+         * Sets up a real-time listener for the score document.
+         */
+        function setupScoreListener() {
+            onSnapshot(scoreDocRef, (docSnap) => {
+                loadingSpinner.style.display = 'none';
+                mainContent.style.display = 'block';
+
+                if (docSnap.exists()) {
+                    // Document exists, render the data
+                    renderUI(docSnap.data());
+                } else {
+                    // Document doesn't exist, create it with initial values
+                    console.log("No score document found, creating one.");
+                    setDoc(scoreDocRef, {
+                        mitch_wins: 0,
+                        patrick_wins: 0,
+                        history: []
+                    }).catch(error => console.error("Error creating document:", error));
+                    // Initial render for the new doc
+                    renderUI({ mitch_wins: 0, patrick_wins: 0, history: [] });
+                }
+            }, (error) => {
+                console.error("Error listening to score document:", error);
+                loadingSpinner.innerHTML = '<p class="text-red-500">Error connecting to scoreboard.</p>';
+            });
+        }
+
+        /**
+         * Updates the score in Firestore for the winning player.
+         * @param {('Mitch'|'Patrick')} winner - The name of the player who won.
+         */
+        async function addWin(winner) {
+            if (!userId) {
+                console.error("Cannot add win: User not authenticated.");
+                return;
+            }
+            const fieldToUpdate = winner === 'Mitch' ? 'mitch_wins' : 'patrick_wins';
+            try {
+                await updateDoc(scoreDocRef, {
+                    [fieldToUpdate]: increment(1),
+                    history: arrayUnion({
+                        winner: winner,
+                        timestamp: serverTimestamp(),
+                        addedBy: userId
+                    })
+                });
+            } catch (error) {
+                // This might happen if the document doesn't exist yet, so we try to create it.
+                if (error.code === 'not-found') {
+                     await setDoc(scoreDocRef, {
+                        mitch_wins: winner === 'Mitch' ? 1 : 0,
+                        patrick_wins: winner === 'Patrick' ? 1 : 0,
+                        history: [
+                            {
+                                winner: winner,
+                                timestamp: serverTimestamp(),
+                                addedBy: userId
+                            }
+                        ]
+                    });
+                } else {
+                    console.error("Error adding win:", error);
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
+        addPatrickWinBtn.addEventListener('click', () => addWin('Patrick'));
+
+        // --- Initial Load ---
+        authenticateUser();
+
+    </script>
+
+    <!-- UI Structure -->
+    <div id="loading-spinner" class="h-screen flex flex-col items-center justify-center">
+         <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="mt-4 text-lg text-gray-400">Connecting to the Scoreboard...</p>
+    </div>
+
+    <main id="main-content" style="display: none;" class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="font-bebas text-5xl md:text-7xl text-amber-400 tracking-wider">THPS All Time Record</h1>
+            <p class="text-2xl md:text-4xl font-bebas text-gray-300">Mitch vs Patrick</p>
+        </header>
+
+        <!-- Score Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-8 md:mb-12">
+            <!-- Mitch's Card -->
+            <div class="player-card rounded-xl p-6 text-center shadow-lg">
+                <h2 class="font-bebas text-4xl text-blue-400">Mitch</h2>
+                <div id="mitch-score" class="font-bebas text-8xl md:text-9xl my-4">0</div>
+                <div id="mitch-tally" class="h-16 text-4xl text-amber-400 flex items-center justify-center flex-wrap"></div>
+                <button id="add-mitch-win" class="btn-win mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg text-xl">
+                    <span>Add Win for Mitch</span>
+                </button>
+            </div>
+
+            <!-- Patrick's Card -->
+            <div class="player-card rounded-xl p-6 text-center shadow-lg">
+                <h2 class="font-bebas text-4xl text-green-400">Patrick</h2>
+                <div id="patrick-score" class="font-bebas text-8xl md:text-9xl my-4">0</div>
+                <div id="patrick-tally" class="h-16 text-4xl text-amber-400 flex items-center justify-center flex-wrap"></div>
+                <button id="add-patrick-win" class="btn-win mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-xl">
+                    <span>Add Win for Patrick</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- History Section -->
+        <section class="bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+            <h3 class="font-bebas text-3xl mb-4 text-center">Game History</h3>
+            <div class="overflow-x-auto">
+                <table id="history-table" class="w-full text-left">
+                    <thead class="border-b-2 border-gray-600">
+                        <tr>
+                            <th class="font-bebas text-xl tracking-wider">Winner</th>
+                            <th class="font-bebas text-xl tracking-wider">Date</th>
+                            <th class="font-bebas text-xl tracking-wider">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body">
+                        <!-- History rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+</body>
+</html>
