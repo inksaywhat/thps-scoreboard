@@ -52,6 +52,9 @@
             border-radius: 5px;
             border: 1px solid #333;
         }
+        .error-log {
+            color: #FF5555; /* A bright red for errors */
+        }
     </style>
 </head>
 <body class="text-white">
@@ -143,12 +146,15 @@
             const debugLogContent = document.getElementById('debug-log-content');
             
             // --- DEBUG LOGGING FUNCTION ---
-            function logDebug(message) {
+            function logDebug(message, isError = false) {
                 const timestamp = new Date().toLocaleTimeString();
                 const logEntry = document.createElement('div');
                 logEntry.textContent = `[${timestamp}] ${message}`;
+                if (isError) {
+                    logEntry.classList.add('error-log');
+                }
                 debugLogContent.appendChild(logEntry);
-                debugLogContent.scrollTop = debugLogContent.scrollHeight; // Auto-scroll to bottom
+                debugLogContent.scrollTop = debugLogContent.scrollHeight; // Auto-scroll
                 console.log(message); // Also log to browser console
             }
 
@@ -157,14 +163,23 @@
             // --- CONFIGURATION ---
             let firebaseConfig, appId;
             try {
-                firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : {};
                 appId = typeof __app_id !== 'undefined' ? __app_id : 'thps-scoreboard-app';
-                logDebug('Firebase config loaded.');
+                logDebug('Firebase config object parsed.');
             } catch(e) {
-                logDebug('ERROR: Firebase config is invalid or missing.');
+                logDebug(`ERROR: Could not parse Firebase config. Invalid JSON. ${e.message}`, true);
                 return;
             }
             
+            // --- CONFIGURATION VALIDATION ---
+            if (!firebaseConfig.apiKey) {
+                const errorMsg = 'ERROR: Firebase config is missing a valid "apiKey". Cannot initialize.';
+                logDebug(errorMsg, true);
+                historyBody.innerHTML = `<tr><td colspan="3" class="text-center p-4 text-red-500">Configuration Error: Invalid API Key provided.</td></tr>`;
+                return; // Stop execution
+            }
+            logDebug('Firebase config loaded and apiKey is present.');
+
             // --- FIREBASE INITIALIZATION ---
             let app, auth, db;
             try {
@@ -173,7 +188,7 @@
                 db = getFirestore(app);
                 logDebug('Firebase services initialized.');
             } catch (e) {
-                logDebug(`ERROR: Firebase initialization failed: ${e.message}`);
+                logDebug(`ERROR: Firebase initialization failed: ${e.message}`, true);
                 return;
             }
 
@@ -196,13 +211,13 @@
                             await signInWithCustomToken(auth, __initial_auth_token);
                             logDebug('Custom token sign-in SUCCESS.');
                         } catch (error) {
-                            logDebug(`Custom token sign-in FAILED: ${error.message}`);
+                            logDebug(`Custom token sign-in FAILED: ${error.message}`, true);
                             logDebug('Falling back to anonymous sign-in.');
                             try {
                                 await signInAnonymously(auth);
                                 logDebug('Anonymous sign-in SUCCESS.');
                             } catch (anonError) {
-                                logDebug(`Anonymous sign-in FAILED: ${anonError.message}`);
+                                logDebug(`Anonymous sign-in FAILED: ${anonError.message}`, true);
                             }
                         }
                     } else {
@@ -211,7 +226,7 @@
                             await signInAnonymously(auth);
                             logDebug('Anonymous sign-in SUCCESS.');
                         } catch (error) {
-                            logDebug(`Anonymous sign-in FAILED: ${error.message}`);
+                            logDebug(`Anonymous sign-in FAILED: ${error.message}`, true);
                         }
                     }
                 }
@@ -220,7 +235,7 @@
             // --- REAL-TIME DATA LISTENER ---
             function listenForUpdates() {
                 const gamesCollectionPath = `artifacts/${appId}/public/data/games`;
-                logDebug(`Checking for scoreboard document at: ${gamesCollectionPath}`);
+                logDebug(`Attaching listener to Firestore collection: ${gamesCollectionPath}`);
                 const q = query(collection(db, gamesCollectionPath));
 
                 onSnapshot(q, (snapshot) => {
@@ -238,7 +253,7 @@
                     updateUI(games);
 
                 }, (error) => {
-                    logDebug(`ERROR listening to database: ${error.message}`);
+                    logDebug(`ERROR listening to database: ${error.message}`, true);
                 });
             }
 
@@ -289,7 +304,7 @@
             
             async function addWin() {
                 if (!playerToCredit || !auth.currentUser) {
-                    logDebug('ERROR: Cannot add win. No player selected or user not authenticated.');
+                    logDebug('ERROR: Cannot add win. No player selected or user not authenticated.', true);
                     return;
                 }
                 logDebug(`Attempting to add win for ${playerToCredit}...`);
@@ -301,7 +316,7 @@
                     });
                     logDebug(`Win logged for ${playerToCredit} in Firestore.`);
                 } catch (error) {
-                    logDebug(`ERROR adding document: ${error.message}`);
+                    logDebug(`ERROR adding document: ${error.message}`, true);
                 }
             }
 
