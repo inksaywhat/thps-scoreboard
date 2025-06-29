@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #111827; padding-bottom: 120px; }
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
         .font-bebas { font-family: 'Bebas Neue', cursive; }
         .tally-marks { font-family: 'Bebas Neue', cursive; letter-spacing: 0.2em; color: #f59e0b; -webkit-text-stroke: 1px #ca8a04; }
         .player-card { background-color: #1f2937; border: 1px solid #374151; transition: all 0.3s ease-in-out; }
@@ -58,148 +58,108 @@
 
     <div id="patrick-modal-overlay" class="fixed inset-0 bg-black bg-opacity-75 z-40 hidden"></div>
     <div id="patrick-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800 border border-amber-400 rounded-lg shadow-2xl p-6 md:p-8 z-50 w-11/12 md:max-w-lg hidden"><p id="patrick-modal-message" class="text-center text-xl md:text-2xl text-white mb-6 font-semibold"></p><div class="flex justify-around"><button id="patrick-confirm-yes" class="btn-win w-2/5 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg text-xl"><span>Yes</span></button><button id="patrick-confirm-no" class="btn-win w-2/5 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg text-xl"><span>No</span></button></div></div>
-
-    <div class="fixed bottom-0 left-0 w-full bg-gray-900 text-white p-2 z-[70] font-mono text-xs max-h-40">
-        <p class="font-bold border-b border-gray-600 mb-1">Debug Log:</p>
-        <div id="debug-log-content" class="w-full h-full overflow-y-auto"></div>
-    </div>
     
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, increment, arrayUnion, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // ** THE FIX: Wrap entire logic in a DOMContentLoaded listener to prevent timing issues **
-        document.addEventListener('DOMContentLoaded', () => {
+    <!-- ** THE FIX: Using classic compat scripts instead of modules ** -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <script>
+        try {
+            const firebaseConfig = {
+              apiKey: "AIzaSyCuxj9XsAyWkNCAQVpd7YWio51wESun96s",
+              authDomain: "thps-final-scoreboard.firebaseapp.com",
+              projectId: "thps-final-scoreboard",
+              storageBucket: "thps-final-scoreboard.appspot.com",
+              messagingSenderId: "596724238233",
+              appId: "1:596724238233:web:221eb7a63ff51fe04eb508"
+            };
+            
+            firebase.initializeApp(firebaseConfig);
 
-            const debugLog = document.getElementById('debug-log-content');
-            function log(message) {
-                console.log(message);
-                const p = document.createElement('p');
-                p.textContent = `> ${message}`;
-                debugLog.appendChild(p);
-                debugLog.scrollTop = debugLog.scrollHeight;
-            }
+            const db = firebase.firestore();
+            const auth = firebase.auth();
+            const { serverTimestamp, increment, arrayUnion } = firebase.firestore.FieldValue;
 
-            try {
-                log('Script starting up (DOM Ready)...');
-                
-                const firebaseConfig = {
-                  apiKey: "AIzaSyCuxj9XsAyWkNCAQVpd7YWio51wESun96s",
-                  authDomain: "thps-final-scoreboard.firebaseapp.com",
-                  projectId: "thps-final-scoreboard",
-                  storageBucket: "thps-final-scoreboard.appspot.com",
-                  messagingSenderId: "596724238233",
-                  appId: "1:596724238233:web:221eb7a63ff51fe04eb508"
-                };
-                log('Firebase config loaded.');
+            const mitchScoreEl = document.getElementById('mitch-score'), patrickScoreEl = document.getElementById('patrick-score'),
+                mitchTallyEl = document.getElementById('mitch-tally'), patrickTallyEl = document.getElementById('patrick-tally'),
+                addMitchWinBtn = document.getElementById('add-mitch-win'), addPatrickWinBtn = document.getElementById('add-patrick-win'),
+                historyBodyEl = document.getElementById('history-body'), loadingSpinner = document.getElementById('loading-spinner'),
+                mainContent = document.getElementById('main-content'), errorContainer = document.getElementById('error-container'),
+                patrickModalOverlay = document.getElementById('patrick-modal-overlay'), patrickModal = document.getElementById('patrick-modal'),
+                patrickModalMessage = document.getElementById('patrick-modal-message'),
+                patrickConfirmYesBtn = document.getElementById('patrick-confirm-yes'), patrickConfirmNoBtn = document.getElementById('patrick-confirm-no');
 
-                const app = initializeApp(firebaseConfig);
-                const db = getFirestore(app);
-                const auth = getAuth(app);
-                log('Firebase services initialized.');
+            const patrickTaunts = [ "patrick that win was charity dont get cocky", "congrats ur now slightly less trash", "mitch was texting his ex when u won that calm down", "wow ur mom must be so proud of u beating mitch once", "click yes to admit that was pure luck", "so u finally figured out how to play huh genius", "even a blind squirrel finds a win sometimes", "say yes if ur the flukiest fluke to ever fluke", "that win was mid and u know it", "this win brought to u by sheer mitch mercy", "click yes to inflate ur ego even more u princess", "damn pat ur on fire psych just one win relax", "even mitch’s grandma coulda blocked that", "was that u winning or did mitch sneeze", "congrats on ur first win since 2019", "yes u won no ur still not good", "if u click yes ur officially proud of mediocrity", "patrick more like pathetic lmao click yes loser", "that was less a win more a mitch error", "someone screenshot this rare ass moment", "1 win closer to being slightly less irrelevant", "click yes if u peaked just now", "ur gameplay is as soft as ur handshake", "patrick u lil bitch stop smiling and click yes", "that win was so weak i almost sneezed it away", "u celebrating this like u won the olympics chill", "click yes to admit mitch went easy on ur ass", "was that skill or divine intervention", "patrick this win aged like milk", "click yes if u just got lucky af", "wow u won finally took u 30 tries", "that win had less power than ur wifi signal", "nice job winning on a distracted manchild", "ur basically the participation trophy of this game", "click yes if ur the weakest alpha ever", "that wasn’t talent bro that was pity in motion", "u win one game and suddenly think ur lebron", "click yes if ur the real life underdog story no one asked for", "mitch literally blinked and u won relax", "ur form was trash but hey a win's a win", "patrick out here grinding for the most average victory", "click yes to confirm ur fluke streak continues", "ur gameplay is so vanilla it hurts", "congrats pat u beat a guy running on 2 hours of sleep", "u play like someone’s dad trying his best", "click yes if u bribed the scoreboard app", "that win felt like watching paint dry but go off king", "patrick that win was as accidental as ur birth" ];
+            let tauntIndex = 0;
+            let userId = null;
 
-                const mitchScoreEl = document.getElementById('mitch-score'), patrickScoreEl = document.getElementById('patrick-score'),
-                    mitchTallyEl = document.getElementById('mitch-tally'), patrickTallyEl = document.getElementById('patrick-tally'),
-                    addMitchWinBtn = document.getElementById('add-mitch-win'), addPatrickWinBtn = document.getElementById('add-patrick-win'),
-                    historyBodyEl = document.getElementById('history-body'), loadingSpinner = document.getElementById('loading-spinner'),
-                    mainContent = document.getElementById('main-content'), errorContainer = document.getElementById('error-container'),
-                    patrickModalOverlay = document.getElementById('patrick-modal-overlay'), patrickModal = document.getElementById('patrick-modal'),
-                    patrickModalMessage = document.getElementById('patrick-modal-message'),
-                    patrickConfirmYesBtn = document.getElementById('patrick-confirm-yes'), patrickConfirmNoBtn = document.getElementById('patrick-confirm-no');
-                log('DOM elements loaded into variables.');
-                
-                const patrickTaunts = [ "patrick that win was charity dont get cocky", "congrats ur now slightly less trash", "mitch was texting his ex when u won that calm down", "wow ur mom must be so proud of u beating mitch once", "click yes to admit that was pure luck", "so u finally figured out how to play huh genius", "even a blind squirrel finds a win sometimes", "say yes if ur the flukiest fluke to ever fluke", "that win was mid and u know it", "this win brought to u by sheer mitch mercy", "click yes to inflate ur ego even more u princess", "damn pat ur on fire psych just one win relax", "even mitch’s grandma coulda blocked that", "was that u winning or did mitch sneeze", "congrats on ur first win since 2019", "yes u won no ur still not good", "if u click yes ur officially proud of mediocrity", "patrick more like pathetic lmao click yes loser", "that was less a win more a mitch error", "someone screenshot this rare ass moment", "1 win closer to being slightly less irrelevant", "click yes if u peaked just now", "ur gameplay is as soft as ur handshake", "patrick u lil bitch stop smiling and click yes", "that win was so weak i almost sneezed it away", "u celebrating this like u won the olympics chill", "click yes to admit mitch went easy on ur ass", "was that skill or divine intervention", "patrick this win aged like milk", "click yes if u just got lucky af", "wow u won finally took u 30 tries", "that win had less power than ur wifi signal", "nice job winning on a distracted manchild", "ur basically the participation trophy of this game", "click yes if ur the weakest alpha ever", "that wasn’t talent bro that was pity in motion", "u win one game and suddenly think ur lebron", "click yes if ur the real life underdog story no one asked for", "mitch literally blinked and u won relax", "ur form was trash but hey a win's a win", "patrick out here grinding for the most average victory", "click yes to confirm ur fluke streak continues", "ur gameplay is so vanilla it hurts", "congrats pat u beat a guy running on 2 hours of sleep", "u play like someone’s dad trying his best", "click yes if u bribed the scoreboard app", "that win felt like watching paint dry but go off king", "patrick that win was as accidental as ur birth" ];
-                let tauntIndex = 0;
-                let userId = null;
-
-                function generateTallyMarks(score) { if (!score || score === 0) return 'No wins yet!'; const fives = Math.floor(score / 5); const ones = score % 5; let tallies = ''; for (let i = 0; i < fives; i++) { tallies += '<span class="inline-block mr-2">||||</span>'; } tallies += '|'.repeat(ones); tallies = tallies.replace(/\|\|\|\|<\/span>/g, '<span style="position: relative; display: inline-block; width: 3.5em; text-decoration: line-through;">||||</span>'); return tallies; }
-                function renderUI(data) { const mitchWins = data.mitch_wins || 0; const patrickWins = data.patrick_wins || 0; const history = data.history || []; mitchScoreEl.textContent = mitchWins; patrickScoreEl.textContent = patrickWins; mitchTallyEl.innerHTML = generateTallyMarks(mitchWins); patrickTallyEl.innerHTML = generateTallyMarks(patrickWins); historyBodyEl.innerHTML = ''; const sortedHistory = history.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); if (sortedHistory.length === 0) { historyBodyEl.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No games recorded yet. Let the battle begin!</td></tr>`; } else { sortedHistory.forEach(game => { const tr = document.createElement('tr'); tr.className = `border-b border-gray-700 ${game.winner === 'Mitch' ? 'bg-blue-900/20' : 'bg-green-900/20'}`; const winnerCell = document.createElement('td'); winnerCell.className = `font-bold ${game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400'}`; winnerCell.textContent = game.winner; const dateCell = document.createElement('td'); dateCell.className = "text-gray-400"; dateCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleDateString() : 'Just now'; const timeCell = document.createElement('td'); timeCell.className = "text-gray-400"; timeCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleTimeString() : ''; tr.appendChild(winnerCell); tr.appendChild(dateCell); tr.appendChild(timeCell); historyBodyEl.appendChild(tr); }); } }
-                
-                async function addWin(winner) {
-                    log(`Attempting to add win for ${winner}.`);
-                    if (!userId) { log("Add win FAILED: User ID is not set."); return; }
-                    const scoreDocRef = doc(db, "scores", "thps-record");
-                    const fieldToUpdate = winner === 'Mitch' ? 'mitch_wins' : 'patrick_wins';
-                    try {
-                        // Using set with merge is robust for both creating and updating
-                        await updateDoc(scoreDocRef, { 
-                            [fieldToUpdate]: increment(1), 
-                            history: arrayUnion({ winner: winner, timestamp: serverTimestamp(), addedBy: userId }) 
-                        });
-                        log(`SUCCESS: Win written for ${winner}.`);
-                    } catch (error) {
-                        log(`DATABASE WRITE FAILED: ${error.message}`);
-                    }
+            function generateTallyMarks(score) { if (!score || score === 0) return 'No wins yet!'; const fives = Math.floor(score / 5); const ones = score % 5; let tallies = ''; for (let i = 0; i < fives; i++) { tallies += '<span class="inline-block mr-2">||||</span>'; } tallies += '|'.repeat(ones); tallies = tallies.replace(/\|\|\|\|<\/span>/g, '<span style="position: relative; display: inline-block; width: 3.5em; text-decoration: line-through;">||||</span>'); return tallies; }
+            function renderUI(data) { const mitchWins = data.mitch_wins || 0; const patrickWins = data.patrick_wins || 0; const history = data.history || []; mitchScoreEl.textContent = mitchWins; patrickScoreEl.textContent = patrickWins; mitchTallyEl.innerHTML = generateTallyMarks(mitchWins); patrickTallyEl.innerHTML = generateTallyMarks(patrickWins); historyBodyEl.innerHTML = ''; const sortedHistory = history.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)); if (sortedHistory.length === 0) { historyBodyEl.innerHTML = `<tr><td colspan="3" class="text-center text-gray-500 py-4">No games recorded yet. Let the battle begin!</td></tr>`; } else { sortedHistory.forEach(game => { const tr = document.createElement('tr'); tr.className = `border-b border-gray-700 ${game.winner === 'Mitch' ? 'bg-blue-900/20' : 'bg-green-900/20'}`; const winnerCell = document.createElement('td'); winnerCell.className = `font-bold ${game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400'}`; winnerCell.textContent = game.winner; const dateCell = document.createElement('td'); dateCell.className = "text-gray-400"; dateCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleDateString() : 'Just now'; const timeCell = document.createElement('td'); timeCell.className = "text-gray-400"; timeCell.textContent = game.timestamp ? new Date(game.timestamp.seconds * 1000).toLocaleTimeString() : ''; tr.appendChild(winnerCell); tr.appendChild(dateCell); tr.appendChild(timeCell); historyBodyEl.appendChild(tr); }); } }
+            
+            async function addWin(winner) {
+                if (!userId) { return; }
+                const scoreDocRef = db.collection("scores").doc("thps-record");
+                const fieldToUpdate = winner === 'Mitch' ? 'mitch_wins' : 'patrick_wins';
+                try {
+                    await scoreDocRef.update({ [fieldToUpdate]: increment(1), history: arrayUnion({ winner: winner, timestamp: serverTimestamp(), addedBy: userId }) });
+                } catch (error) {
+                    if (error.code === 'not-found') {
+                        await scoreDocRef.set({ mitch_wins: winner === 'Mitch' ? 1 : 0, patrick_wins: winner === 'Patrick' ? 1 : 0, history: [{ winner: winner, timestamp: serverTimestamp(), addedBy: userId }] });
+                    } else { console.error("Error adding win:", error); }
                 }
-                
-                function showPatrickConfirmation() { log('Showing Patrick confirmation modal.'); patrickModalMessage.textContent = patrickTaunts[tauntIndex]; tauntIndex = (tauntIndex + 1) % patrickTaunts.length; patrickModalOverlay.classList.remove('hidden'); patrickModal.classList.remove('hidden'); };
-                function hidePatrickModal() { log('Hiding Patrick confirmation modal.'); patrickModalOverlay.classList.add('hidden'); patrickModal.classList.add('hidden'); };
-
-                async function initializeScoreboard() {
-                    log('Setting up Auth State Listener...');
-                    onAuthStateChanged(auth, async (user) => {
-                        log('Auth state has changed.');
-                        if (user) {
-                            log(`User authenticated with UID: ${user.uid}`);
-                            userId = user.uid;
-                            const scoreDocRef = doc(db, "scores", "thps-record");
-                            
-                            try {
-                                log('Checking for scoreboard document...');
-                                const docSnap = await getDoc(scoreDocRef);
-                                if (!docSnap.exists()) {
-                                    log('Document not found. Creating it now...');
-                                    await setDoc(scoreDocRef, { mitch_wins: 0, patrick_wins: 0, history: [] });
-                                    log('Document created successfully.');
-                                } else {
-                                    log('Document already exists.');
-                                }
-
-                                log('Setting up Firestore data listener (onSnapshot)...');
-                                onSnapshot(scoreDocRef, (doc) => {
-                                    log('Received data update from Firestore.');
-                                    loadingSpinner.style.display = 'none';
-                                    mainContent.style.display = 'block';
-                                    errorContainer.style.display = 'none';
-                                    if (doc.exists()) { renderUI(doc.data()); }
-                                }, (error) => {
-                                    log(`FIRESTORE LISTENER ERROR: ${error.message}`);
-                                    loadingSpinner.style.display = 'none';
-                                    errorContainer.textContent = `Firestore permission error: ${error.message}. Check rules.`;
-                                    errorContainer.style.display = 'block';
-                                });
-
-                                log('Attaching click listeners to buttons...');
-                                addMitchWinBtn.addEventListener('click', () => { log('Mitch win button clicked.'); addWin('Mitch'); });
-                                addPatrickWinBtn.addEventListener('click', () => { log('Patrick win button clicked.'); showPatrickConfirmation(); });
-                                patrickConfirmYesBtn.addEventListener('click', () => { log('Patrick "Yes" clicked.'); addWin('Patrick'); hidePatrickModal(); });
-                                patrickConfirmNoBtn.addEventListener('click', () => { log('Patrick "No" clicked.'); hidePatrickModal(); });
-                                patrickModalOverlay.addEventListener('click', () => { log('Modal overlay clicked.'); hidePatrickModal(); });
-                                log('All click listeners have been attached.');
-
-                            } catch (error) {
-                                log(`CRITICAL SETUP FAILED: ${error.message}`);
-                                errorContainer.textContent = `A critical error occurred: ${error.message}. Please check Firestore rules and network connection.`;
-                                errorContainer.style.display = 'block';
-                                loadingSpinner.style.display = 'none';
-                            }
-
-                        } else {
-                            log('User not authenticated. Attempting anonymous sign-in...');
-                            signInAnonymously(auth).catch(authError => {
-                                log(`CRITICAL SIGN-IN FAILED: ${authError.code} - ${authError.message}`);
-                            });
+            }
+            
+            function showPatrickConfirmation() { patrickModalMessage.textContent = patrickTaunts[tauntIndex]; tauntIndex = (tauntIndex + 1) % patrickTaunts.length; patrickModalOverlay.classList.remove('hidden'); patrickModal.classList.remove('hidden'); };
+            function hidePatrickModal() { patrickModalOverlay.classList.add('hidden'); patrickModal.classList.add('hidden'); };
+            
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    const scoreDocRef = db.collection("scores").doc("thps-record");
+                    
+                    try {
+                        const doc = await scoreDocRef.get();
+                        if (!doc.exists) {
+                           await scoreDocRef.set({ mitch_wins: 0, patrick_wins: 0, history: [] });
                         }
+
+                        scoreDocRef.onSnapshot((docSnap) => {
+                            loadingSpinner.style.display = 'none';
+                            mainContent.style.display = 'block';
+                            errorContainer.style.display = 'none';
+                            if(docSnap.exists) { renderUI(docSnap.data()); }
+                        }, (error) => {
+                             errorContainer.textContent = `Firestore connection error: ${error.message}`;
+                             errorContainer.style.display = 'block';
+                             loadingSpinner.style.display = 'none';
+                        });
+
+                        addMitchWinBtn.addEventListener('click', () => addWin('Mitch'));
+                        addPatrickWinBtn.addEventListener('click', showPatrickConfirmation);
+                        patrickConfirmYesBtn.addEventListener('click', () => { addWin('Patrick'); hidePatrickModal(); });
+                        patrickConfirmNoBtn.addEventListener('click', hidePatrickModal);
+                        patrickModalOverlay.addEventListener('click', hidePatrickModal);
+
+                    } catch (error) {
+                         errorContainer.textContent = `Could not initialize scoreboard. Check Firestore Rules. Error: ${error.message}`;
+                         errorContainer.style.display = 'block';
+                         loadingSpinner.style.display = 'none';
+                    }
+
+                } else {
+                    auth.signInAnonymously().catch(authError => {
+                        errorContainer.textContent = `Could not connect: ${authError.message}`;
+                        errorContainer.style.display = 'block';
+                        loadingSpinner.style.display = 'none';
                     });
                 }
-                
-                initializeScoreboard();
-
-            } catch (e) {
-                log(`FATAL SCRIPT ERROR: ${e.message}`);
-            }
-        });
+            });
+        } catch (e) { 
+            document.getElementById('error-container').textContent = `A fatal error occurred: ${e.message}`;
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('loading-spinner').style.display = 'none';
+        }
     </script>
 </body>
 </html>
