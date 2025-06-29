@@ -127,7 +127,7 @@
     <script type="module">
         // Firebase Core Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -161,19 +161,21 @@
             logDebug('Script starting up (DOM Ready)...');
 
             // --- CONFIGURATION ---
-            let firebaseConfig, appId;
-            try {
-                firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : {};
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'thps-scoreboard-app';
-                logDebug('Firebase config object parsed.');
-            } catch(e) {
-                logDebug(`ERROR: Could not parse Firebase config. Invalid JSON. ${e.message}`, true);
-                return;
-            }
+            // The Firebase config is now hardcoded directly from your screenshot.
+            const firebaseConfig = {
+                apiKey: "AIzaSyCuaJXhV9kkhWCAQYUD7HmU5lwAEsuM9s",
+                authDomain: "thps-final-scoreboard.firebaseapp.com",
+                projectId: "thps-final-scoreboard",
+                storageBucket: "thps-final-scoreboard.appspot.com",
+                messagingSenderId: "596724238233",
+                appId: "1:596724238233:web:221eb7a53f851fe04eb598"
+            };
+            const appId = firebaseConfig.projectId;
+            logDebug('Firebase config is hardcoded.');
             
             // --- CONFIGURATION VALIDATION ---
             if (!firebaseConfig.apiKey) {
-                const errorMsg = 'ERROR: Firebase config is missing a valid "apiKey". Cannot initialize.';
+                const errorMsg = 'ERROR: Hardcoded Firebase config is missing a valid "apiKey".';
                 logDebug(errorMsg, true);
                 historyBody.innerHTML = `<tr><td colspan="3" class="text-center p-4 text-red-500">Configuration Error: Invalid API Key provided.</td></tr>`;
                 return; // Stop execution
@@ -186,7 +188,7 @@
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                logDebug('Firebase services initialized.');
+                logDebug('Firebase services initialized successfully.');
             } catch (e) {
                 logDebug(`ERROR: Firebase initialization failed: ${e.message}`, true);
                 return;
@@ -204,30 +206,12 @@
                     logDebug(`User authenticated with UID: ${user.uid}`);
                     listenForUpdates();
                 } else {
-                    logDebug('No user signed in. Determining auth method...');
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        logDebug('Attempting sign-in with custom token...');
-                        try {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                            logDebug('Custom token sign-in SUCCESS.');
-                        } catch (error) {
-                            logDebug(`Custom token sign-in FAILED: ${error.message}`, true);
-                            logDebug('Falling back to anonymous sign-in.');
-                            try {
-                                await signInAnonymously(auth);
-                                logDebug('Anonymous sign-in SUCCESS.');
-                            } catch (anonError) {
-                                logDebug(`Anonymous sign-in FAILED: ${anonError.message}`, true);
-                            }
-                        }
-                    } else {
-                        logDebug('No custom token found. Attempting anonymous sign-in...');
-                        try {
-                            await signInAnonymously(auth);
-                            logDebug('Anonymous sign-in SUCCESS.');
-                        } catch (error) {
-                            logDebug(`Anonymous sign-in FAILED: ${error.message}`, true);
-                        }
+                    logDebug('No user signed in. Attempting anonymous sign-in...');
+                    try {
+                        await signInAnonymously(auth);
+                        logDebug('Anonymous sign-in SUCCESS.');
+                    } catch (error) {
+                        logDebug(`Anonymous sign-in FAILED: ${error.message}`, true);
                     }
                 }
             });
