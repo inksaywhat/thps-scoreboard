@@ -34,12 +34,23 @@
         .btn-patrick:hover {
             background-color: #059669; /* green-600 */
         }
-        .history-table {
+        .history-table, .debug-window {
             background-color: #1F2937; /* gray-800 */
             border: 1px solid #374151; /* gray-700 */
         }
         .modal-content {
              background-color: #1F2937; /* gray-800 */
+        }
+        .debug-log {
+            height: 150px;
+            background-color: #000;
+            color: #0F0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 10px;
+            overflow-y: scroll;
+            border-radius: 5px;
+            border: 1px solid #333;
         }
     </style>
 </head>
@@ -72,7 +83,7 @@
         </main>
 
         <!-- Game History -->
-        <section class="history-table rounded-lg p-6 shadow-lg">
+        <section class="history-table rounded-lg p-6 shadow-lg mb-8">
             <h3 class="text-2xl font-bold text-center mb-4">Game History</h3>
             <div class="overflow-x-auto">
                 <table class="w-full text-left">
@@ -84,12 +95,18 @@
                         </tr>
                     </thead>
                     <tbody id="history-body">
-                        <!-- History rows will be injected here by JavaScript -->
-                         <tr><td colspan="3" class="text-center p-4 text-gray-500">No games recorded yet. Let the battle begin!</td></tr>
+                         <tr><td colspan="3" class="text-center p-4 text-gray-500">Connecting...</td></tr>
                     </tbody>
                 </table>
             </div>
         </section>
+
+        <!-- Debug Log -->
+        <section class="debug-window rounded-lg p-6 shadow-lg">
+            <h3 class="text-xl font-bold text-center mb-4">Debug Log</h3>
+            <div id="debug-log-content" class="debug-log"></div>
+        </section>
+
     </div>
 
     <!-- Confirmation Modal -->
@@ -108,27 +125,9 @@
         // Firebase Core Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // IMPORTANT: This event listener ensures the entire page is loaded before the script runs.
         document.addEventListener('DOMContentLoaded', () => {
-            // --- CONFIGURATION ---
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'thps-scoreboard-app';
-            
-            // --- FIREBASE INITIALIZATION ---
-            let app, auth, db;
-            try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-            } catch (e) {
-                console.error("Firebase initialization failed:", e);
-                // Do not use alert() here as it can block the script.
-                document.body.innerHTML = '<div class="text-white text-center p-8">Could not connect to the database. Please check the configuration.</div>';
-                return;
-            }
-
             // --- DOM ELEMENTS ---
             const mitchScoreEl = document.getElementById('mitch-score');
             const patrickScoreEl = document.getElementById('patrick-score');
@@ -141,45 +140,78 @@
             const modalMessage = document.getElementById('modal-message');
             const modalBtnYes = document.getElementById('modal-btn-yes');
             const modalBtnNo = document.getElementById('modal-btn-no');
+            const debugLogContent = document.getElementById('debug-log-content');
+            
+            // --- DEBUG LOGGING FUNCTION ---
+            function logDebug(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                debugLogContent.appendChild(logEntry);
+                debugLogContent.scrollTop = debugLogContent.scrollHeight; // Auto-scroll to bottom
+                console.log(message); // Also log to browser console
+            }
+
+            logDebug('Script starting up (DOM Ready)...');
+
+            // --- CONFIGURATION ---
+            let firebaseConfig, appId;
+            try {
+                firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'thps-scoreboard-app';
+                logDebug('Firebase config loaded.');
+            } catch(e) {
+                logDebug('ERROR: Firebase config is invalid or missing.');
+                return;
+            }
+            
+            // --- FIREBASE INITIALIZATION ---
+            let app, auth, db;
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                logDebug('Firebase services initialized.');
+            } catch (e) {
+                logDebug(`ERROR: Firebase initialization failed: ${e.message}`);
+                return;
+            }
 
             // --- SHIT-TALKING MESSAGES ---
-            const taunts = [
-                "that win was charity dont get cocky", "congrats ur now slightly less trash", "your opponent was texting their ex when u won that calm down", "wow ur mom must be so proud of u winning once", "click yes to admit that was pure luck", "so u finally figured out how to play huh genius", "even a blind squirrel finds a win sometimes", "say yes if ur the flukiest fluke to ever fluke", "that win was mid and u know it", "this win brought to u by sheer opponent mercy", "click yes to inflate ur ego even more u princess", "damn ur on fire psych just one win relax", "even my grandma coulda blocked that", "was that u winning or did your opponent sneeze", "congrats on ur first win since 2019", "yes u won no ur still not good", "if u click yes ur officially proud of mediocrity", "more like pathetic lmao click yes loser", "that was less a win more an opponent error", "someone screenshot this rare ass moment", "1 win closer to being slightly less irrelevant", "click yes if u peaked just now", "ur gameplay is as soft as ur handshake", "u lil bitch stop smiling and click yes", "that win was so weak i almost sneezed it away", "u celebrating this like u won the olympics chill", "click yes to admit your opponent went easy on ur ass", "was that skill or divine intervention", "this win aged like milk", "click yes if u just got lucky af", "wow u won finally took u 30 tries", "that win had less power than ur wifi signal", "nice job winning on a distracted manchild", "ur basically the participation trophy of this game", "click yes if ur the weakest alpha ever", "that wasn’t talent bro that was pity in motion", "u win one game and suddenly think ur lebron", "click yes if ur the real life underdog story no one asked for", "your opponent literally blinked and u won relax", "ur form was trash but hey a win's a win", "out here grinding for the most average victory", "click yes to confirm ur fluke streak continues", "ur gameplay is so vanilla it hurts", "congrats u beat a guy running on 2 hours of sleep", "u play like someone’s dad trying his best", "click yes if u bribed the scoreboard app", "that win felt like watching paint dry but go off king", "that win was as accidental as ur birth"
-            ];
+            const taunts = [ "that win was charity dont get cocky", "congrats ur now slightly less trash", "your opponent was texting their ex when u won that calm down", "wow ur mom must be so proud of u winning once", "click yes to admit that was pure luck", "so u finally figured out how to play huh genius", "even a blind squirrel finds a win sometimes", "say yes if ur the flukiest fluke to ever fluke", "that win was mid and u know it", "this win brought to u by sheer opponent mercy", "click yes to inflate ur ego even more u princess", "damn ur on fire psych just one win relax", "even my grandma coulda blocked that", "was that u winning or did your opponent sneeze", "congrats on ur first win since 2019", "yes u won no ur still not good", "if u click yes ur officially proud of mediocrity", "more like pathetic lmao click yes loser", "that was less a win more an opponent error", "someone screenshot this rare ass moment", "1 win closer to being slightly less irrelevant", "click yes if u peaked just now", "ur gameplay is as soft as ur handshake", "u lil bitch stop smiling and click yes", "that win was so weak i almost sneezed it away", "u celebrating this like u won the olympics chill", "click yes to admit your opponent went easy on ur ass", "was that skill or divine intervention", "this win aged like milk", "click yes if u just got lucky af", "wow u won finally took u 30 tries", "that win had less power than ur wifi signal", "nice job winning on a distracted manchild", "ur basically the participation trophy of this game", "click yes if ur the weakest alpha ever", "that wasn’t talent bro that was pity in motion", "u win one game and suddenly think ur lebron", "click yes if ur the real life underdog story no one asked for", "your opponent literally blinked and u won relax", "ur form was trash but hey a win's a win", "out here grinding for the most average victory", "click yes to confirm ur fluke streak continues", "ur gameplay is so vanilla it hurts", "congrats u beat a guy running on 2 hours of sleep", "u play like someone’s dad trying his best", "click yes if u bribed the scoreboard app", "that win felt like watching paint dry but go off king", "that win was as accidental as ur birth" ];
             
             let playerToCredit = null;
 
             // --- AUTHENTICATION ---
+            logDebug('Setting up auth state listener...');
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    console.log("User authenticated:", user.uid);
-                    // User is signed in, start listening for real-time updates.
+                    logDebug(`User authenticated with UID: ${user.uid}`);
                     listenForUpdates();
                 } else {
-                    console.log("No user signed in, determining auth method...");
+                    logDebug('No user signed in. Determining auth method...');
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        console.log("Attempting sign-in with custom token...");
+                        logDebug('Attempting sign-in with custom token...');
                         try {
                             await signInWithCustomToken(auth, __initial_auth_token);
+                            logDebug('Custom token sign-in SUCCESS.');
                         } catch (error) {
-                            console.error("Custom token sign-in failed:", error);
-                            console.log("Falling back to anonymous sign-in.");
+                            logDebug(`Custom token sign-in FAILED: ${error.message}`);
+                            logDebug('Falling back to anonymous sign-in.');
                             try {
                                 await signInAnonymously(auth);
+                                logDebug('Anonymous sign-in SUCCESS.');
                             } catch (anonError) {
-                                console.error("Anonymous sign-in also failed:", anonError);
-                                // Display error to user without alert
-                                document.body.innerHTML = '<div class="text-white text-center p-8">Could not establish a secure connection.</div>';
+                                logDebug(`Anonymous sign-in FAILED: ${anonError.message}`);
                             }
                         }
                     } else {
-                        console.log("Attempting anonymous sign-in...");
+                        logDebug('No custom token found. Attempting anonymous sign-in...');
                         try {
                             await signInAnonymously(auth);
+                            logDebug('Anonymous sign-in SUCCESS.');
                         } catch (error) {
-                            console.error("Anonymous sign-in failed:", error);
-                             // Display error to user without alert
-                            document.body.innerHTML = '<div class="text-white text-center p-8">Could not establish a secure connection.</div>';
+                            logDebug(`Anonymous sign-in FAILED: ${error.message}`);
                         }
                     }
                 }
@@ -188,76 +220,51 @@
             // --- REAL-TIME DATA LISTENER ---
             function listenForUpdates() {
                 const gamesCollectionPath = `artifacts/${appId}/public/data/games`;
+                logDebug(`Checking for scoreboard document at: ${gamesCollectionPath}`);
                 const q = query(collection(db, gamesCollectionPath));
 
                 onSnapshot(q, (snapshot) => {
+                    logDebug(`Received update with ${snapshot.size} game(s).`);
                     if (snapshot.empty) {
-                        console.log("No games found in the database.");
                         resetUI();
+                        historyBody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-gray-500">No games recorded yet. Let the battle begin!</td></tr>';
                         return;
                     }
 
                     const games = [];
-                    snapshot.forEach(doc => {
-                        games.push({ id: doc.id, ...doc.data() });
-                    });
-                    
-                    // Sort games by timestamp, newest first.
-                    games.sort((a, b) => {
-                        const timeA = a.timestamp?.toMillis() || 0;
-                        const timeB = b.timestamp?.toMillis() || 0;
-                        return timeB - timeA;
-                    });
+                    snapshot.forEach(doc => games.push(doc.data()));
+                    games.sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
                     
                     updateUI(games);
 
                 }, (error) => {
-                    console.error("Error listening to database:", error);
-                    // Display error to user without alert
-                     document.body.innerHTML = '<div class="text-white text-center p-8">Lost connection to the scoreboard. Please refresh the page.</div>';
+                    logDebug(`ERROR listening to database: ${error.message}`);
                 });
             }
 
             // --- UI UPDATE LOGIC ---
             function updateUI(games) {
-                let mitchWins = 0;
-                let patrickWins = 0;
+                let mitchWins = games.filter(g => g.winner === 'Mitch').length;
+                let patrickWins = games.filter(g => g.winner === 'Patrick').length;
 
-                // Calculate scores
-                games.forEach(game => {
-                    if (game.winner === 'Mitch') {
-                        mitchWins++;
-                    } else if (game.winner === 'Patrick') {
-                        patrickWins++;
-                    }
-                });
-
-                // Update score displays
                 mitchScoreEl.textContent = mitchWins;
                 patrickScoreEl.textContent = patrickWins;
                 
-                // Update tally marks
-                mitchTallyEl.textContent = mitchWins > 0 ? 'I'.repeat(mitchWins) : 'No wins yet!';
-                patrickTallyEl.textContent = patrickWins > 0 ? 'I'.repeat(patrickWins) : 'No wins yet!';
+                mitchTallyEl.textContent = mitchWins === 0 ? 'No wins yet!' : (mitchWins === 1 ? '1 Win' : `${mitchWins} Wins`);
+                patrickTallyEl.textContent = patrickWins === 0 ? 'No wins yet!' : (patrickWins === 1 ? '1 Win' : `${patrickWins} Wins`);
 
-                // Update history table
-                historyBody.innerHTML = ''; // Clear previous entries
-                if(games.length > 0) {
-                    games.forEach(game => {
-                        const date = game.timestamp ? game.timestamp.toDate() : new Date();
-                        const winnerClass = game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400';
-                        const row = `
-                            <tr class="border-b border-gray-700">
-                                <td class="p-2 font-bold ${winnerClass}">${game.winner.toUpperCase()}</td>
-                                <td class="p-2 text-gray-400">${date.toLocaleDateString()}</td>
-                                <td class="p-2 text-gray-400 text-right">${date.toLocaleTimeString()}</td>
-                            </tr>
-                        `;
-                        historyBody.innerHTML += row;
-                    });
-                } else {
-                     historyBody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-gray-500">No games recorded yet. Let the battle begin!</td></tr>';
-                }
+                historyBody.innerHTML = ''; 
+                games.forEach(game => {
+                    const date = game.timestamp ? game.timestamp.toDate() : new Date();
+                    const winnerClass = game.winner === 'Mitch' ? 'text-blue-400' : 'text-green-400';
+                    historyBody.innerHTML += `
+                        <tr class="border-b border-gray-700">
+                            <td class="p-2 font-bold ${winnerClass}">${game.winner.toUpperCase()}</td>
+                            <td class="p-2 text-gray-400">${date.toLocaleDateString()}</td>
+                            <td class="p-2 text-gray-400 text-right">${date.toLocaleTimeString()}</td>
+                        </tr>`;
+                });
+                logDebug('UI updated successfully.');
             }
             
             function resetUI() {
@@ -265,14 +272,13 @@
                 patrickScoreEl.textContent = '0';
                 mitchTallyEl.textContent = 'No wins yet!';
                 patrickTallyEl.textContent = 'No wins yet!';
-                historyBody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-gray-500">No games recorded yet. Let the battle begin!</td></tr>';
+                logDebug('UI reset to default state.');
             }
 
             // --- MODAL AND EVENT HANDLING ---
             function openConfirmationModal(player) {
                 playerToCredit = player;
-                const randomTaunt = taunts[Math.floor(Math.random() * taunts.length)];
-                modalMessage.textContent = randomTaunt;
+                modalMessage.textContent = taunts[Math.floor(Math.random() * taunts.length)];
                 modal.classList.remove('hidden');
             }
 
@@ -282,20 +288,20 @@
             }
             
             async function addWin() {
-                if (!playerToCredit) return;
-
+                if (!playerToCredit || !auth.currentUser) {
+                    logDebug('ERROR: Cannot add win. No player selected or user not authenticated.');
+                    return;
+                }
+                logDebug(`Attempting to add win for ${playerToCredit}...`);
                 const gamesCollectionPath = `artifacts/${appId}/public/data/games`;
                 try {
                     await addDoc(collection(db, gamesCollectionPath), {
                         winner: playerToCredit,
                         timestamp: serverTimestamp()
                     });
-                    console.log(`Win logged for ${playerToCredit}`);
+                    logDebug(`Win logged for ${playerToCredit} in Firestore.`);
                 } catch (error) {
-                    console.error("Error adding document: ", error);
-                    modalMessage.textContent = 'Failed to record win. Please try again.';
-                    modal.classList.remove('hidden');
-                    setTimeout(() => modal.classList.add('hidden'), 3000);
+                    logDebug(`ERROR adding document: ${error.message}`);
                 }
             }
 
@@ -310,12 +316,7 @@
                 closeConfirmationModal();
             });
 
-            // Close modal if clicking outside of it
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeConfirmationModal();
-                }
-            });
+            modal.addEventListener('click', (e) => e.target === modal && closeConfirmationModal());
         });
     </script>
 </body>
